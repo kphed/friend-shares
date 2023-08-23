@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.19;
 
-import "forge-std/Test.sol";
 import {Ownable} from "solady/auth/Ownable.sol";
 import {SafeTransferLib} from "solady/utils/SafeTransferLib.sol";
 import {SafeCastLib} from "solady/utils/SafeCastLib.sol";
@@ -16,30 +15,32 @@ contract FriendShares is Ownable, ExponentialCurve {
 
     // 4% fee goes to the shares subject.
     uint256 private constant SUBJECT_FEE_PERCENT = 4e16;
-    uint256 private constant FEE_PERCENT_BASE = 10_000;
-    uint256 private constant INITIAL_PRICE = 0.001 ether;
 
-    // Price changes by 1% for each share bought or sold.
-    uint128 private constant EXPONENTIAL_CURVE_DELTA = 1e18 + 1e16;
+    // The price for the first share.
+    uint256 private constant INITIAL_PRICE = 0.01 ether;
 
-    // SharesSubject => (Holder => Balance)
-    mapping(address => mapping(address => uint256)) public sharesBalance;
+    // Price changes by 0.1% for each share bought or sold.
+    uint128 private constant EXPONENTIAL_CURVE_DELTA = 1e18 + 1e15;
 
-    // SharesSubject => Supply
-    mapping(address => uint256) public sharesSupply;
+    mapping(address subject => mapping(address owner => uint256 balance)) public sharesBalance;
+    mapping(address subject => uint256 supply) public sharesSupply;
+    mapping(address subject => uint256 price) public sharesPrice;
 
-    // Shares price.
-    mapping(address => uint256) public sharesPrice;
-
-    event Trade(
+    event BuyShares(
         address indexed trader,
         address indexed subject,
-        bool indexed isBuy,
-        uint256 shareAmount,
-        uint256 ethAmount,
-        uint256 protocolEthAmount,
-        uint256 subjectEthAmount,
-        uint256 supply
+        uint256 shares,
+        uint256 totalPayment,
+        uint256 protocolFee,
+        uint256 subjectFee
+    );
+    event SellShares(
+        address indexed trader,
+        address indexed subject,
+        uint256 shares,
+        uint256 salesProceeds,
+        uint256 protocolFee,
+        uint256 subjectFee
     );
 
     error InsufficientPayment();
@@ -48,27 +49,7 @@ contract FriendShares is Ownable, ExponentialCurve {
         _initializeOwner(initialOwner);
     }
 
-    function getPrice(uint256 supply, uint256 amount) public pure returns (uint256) {
-        uint256 sum1 = supply == 0 ? 0 : (supply - 1) * (supply) * (2 * (supply - 1) + 1) / 6;
-        uint256 sum2 = supply == 0 && amount == 1
-            ? 0
-            : (supply - 1 + amount) * (supply + amount) * (2 * (supply - 1 + amount) + 1) / 6;
-        uint256 summation = sum2 - sum1;
-        return summation * 1 ether / 16000;
-    }
-
-    function getSellPrice(address sharesSubject, uint256 amount) public view returns (uint256) {
-        return getPrice(sharesSupply[sharesSubject] - amount, amount);
-    }
-
-    function getSellPriceAfterFee(address sharesSubject, uint256 amount) public view returns (uint256) {
-        uint256 price = getSellPrice(sharesSubject, amount);
-        uint256 protocolFee = price * PROTOCOL_FEE_PERCENT / FEE_PERCENT_BASE;
-        uint256 subjectFee = price * SUBJECT_FEE_PERCENT / FEE_PERCENT_BASE;
-        return price - protocolFee - subjectFee;
-    }
-
-    function buyShares(address sharesSubject, uint256 amount) public payable {
+    function buyShares(address sharesSubject, uint256 amount) external payable {
         uint256 spotPrice = sharesPrice[sharesSubject];
 
         // Set the initial spot price if it has not yet been set.
@@ -87,18 +68,9 @@ contract FriendShares is Ownable, ExponentialCurve {
         // Update the subject's shares supply and price, and the trader's balance before making external calls.
         sharesSupply[sharesSubject] = supply + amount;
         sharesPrice[sharesSubject] = newSpotPrice;
-        sharesBalance[sharesSubject][msg.sender] = sharesBalance[sharesSubject][msg.sender] + amount;
+        sharesBalance[sharesSubject][msg.sender] += amount;
 
-        emit Trade(
-            msg.sender,
-            sharesSubject,
-            true,
-            amount,
-            totalPayment - subjectFee - protocolFee,
-            protocolFee,
-            subjectFee,
-            supply + amount
-        );
+        emit BuyShares(msg.sender, sharesSubject, amount, totalPayment, protocolFee, subjectFee);
 
         // Distribute ETH fees.
         owner().safeTransferETH(protocolFee);
@@ -110,24 +82,31 @@ contract FriendShares is Ownable, ExponentialCurve {
         }
     }
 
-    function sellShares(address sharesSubject, uint256 amount) public payable {
+    function sellShares(address sharesSubject, uint256 amount) external {
+        (, uint128 newSpotPrice,, uint256 salesProceeds, uint256 subjectFee, uint256 protocolFee) = getSellInfo(
+            sharesPrice[sharesSubject].toUint128(),
+            EXPONENTIAL_CURVE_DELTA,
+            amount,
+            PROTOCOL_FEE_PERCENT,
+            SUBJECT_FEE_PERCENT
+        );
+
         uint256 supply = sharesSupply[sharesSubject];
 
-        require(supply > amount, "Cannot sell the last share");
-
-        uint256 price = getPrice(supply - amount, amount);
-        uint256 protocolFee = price * PROTOCOL_FEE_PERCENT / FEE_PERCENT_BASE;
-        uint256 subjectFee = price * SUBJECT_FEE_PERCENT / FEE_PERCENT_BASE;
-
-        require(sharesBalance[sharesSubject][msg.sender] >= amount, "Insufficient shares");
-
-        sharesBalance[sharesSubject][msg.sender] = sharesBalance[sharesSubject][msg.sender] - amount;
+        // Throws with an arithmetic underflow error if the sell amount exceeds the current supply.
         sharesSupply[sharesSubject] = supply - amount;
 
-        emit Trade(msg.sender, sharesSubject, false, amount, price, protocolFee, subjectFee, supply - amount);
+        // Throws with an arithmetic underflow error if `msg.sender` doesn't have enough shares to sell.
+        sharesBalance[sharesSubject][msg.sender] -= amount;
 
-        // Distribute ETH fees.
-        msg.sender.safeTransferETH(price - protocolFee - subjectFee);
+        sharesPrice[sharesSubject] = newSpotPrice;
+
+        emit SellShares(msg.sender, sharesSubject, amount, salesProceeds, protocolFee, subjectFee);
+
+        // Distribute sales proceeds to seller (fees have already been deducted).
+        msg.sender.safeTransferETH(salesProceeds);
+
+        // Distribute fees to the protocol and subject.
         owner().safeTransferETH(protocolFee);
         sharesSubject.safeTransferETH(subjectFee);
     }
