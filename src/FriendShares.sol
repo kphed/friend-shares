@@ -2,9 +2,12 @@
 pragma solidity 0.8.19;
 
 import {Ownable} from "solady/auth/Ownable.sol";
+import {SafeTransferLib} from "solady/utils/SafeTransferLib.sol";
 import {XykCurve} from "sudoswap/bonding-curves/XykCurve.sol";
 
 contract FriendShares is Ownable, XykCurve {
+    using SafeTransferLib for address;
+
     uint256 public constant PROTOCOL_FEE_PERCENT = 100;
     uint256 public constant SUBJECT_FEE_PERCENT = 400;
     uint256 public constant FEE_PERCENT_BASE = 10_000;
@@ -71,9 +74,10 @@ contract FriendShares is Ownable, XykCurve {
         sharesBalance[sharesSubject][msg.sender] = sharesBalance[sharesSubject][msg.sender] + amount;
         sharesSupply[sharesSubject] = supply + amount;
         emit Trade(msg.sender, sharesSubject, true, amount, price, protocolFee, subjectFee, supply + amount);
-        (bool success1,) = owner().call{value: protocolFee}("");
-        (bool success2,) = sharesSubject.call{value: subjectFee}("");
-        require(success1 && success2, "Unable to send funds");
+
+        // Distribute ETH fees.
+        owner().safeTransferETH(protocolFee);
+        sharesSubject.safeTransferETH(subjectFee);
     }
 
     function sellShares(address sharesSubject, uint256 amount) public payable {
@@ -86,9 +90,10 @@ contract FriendShares is Ownable, XykCurve {
         sharesBalance[sharesSubject][msg.sender] = sharesBalance[sharesSubject][msg.sender] - amount;
         sharesSupply[sharesSubject] = supply - amount;
         emit Trade(msg.sender, sharesSubject, false, amount, price, protocolFee, subjectFee, supply - amount);
-        (bool success1,) = msg.sender.call{value: price - protocolFee - subjectFee}("");
-        (bool success2,) = owner().call{value: protocolFee}("");
-        (bool success3,) = sharesSubject.call{value: subjectFee}("");
-        require(success1 && success2 && success3, "Unable to send funds");
+
+        // Distribute ETH fees.
+        msg.sender.safeTransferETH(price - protocolFee - subjectFee);
+        owner().safeTransferETH(protocolFee);
+        sharesSubject.safeTransferETH(subjectFee);
     }
 }
