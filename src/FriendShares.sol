@@ -2,11 +2,12 @@
 pragma solidity 0.8.19;
 
 import {Ownable} from "solady/auth/Ownable.sol";
+import {XykCurve} from "sudoswap/bonding-curves/XykCurve.sol";
 
-contract FriendShares is Ownable {
-    address public protocolFeeDestination;
-    uint256 public protocolFeePercent;
-    uint256 public subjectFeePercent;
+contract FriendShares is Ownable, XykCurve {
+    uint256 public constant PROTOCOL_FEE_PERCENT = 100;
+    uint256 public constant SUBJECT_FEE_PERCENT = 400;
+    uint256 public constant FEE_PERCENT_BASE = 10_000;
 
     event Trade(
         address trader,
@@ -29,18 +30,6 @@ contract FriendShares is Ownable {
         _initializeOwner(initialOwner);
     }
 
-    function setFeeDestination(address _feeDestination) public onlyOwner {
-        protocolFeeDestination = _feeDestination;
-    }
-
-    function setProtocolFeePercent(uint256 _feePercent) public onlyOwner {
-        protocolFeePercent = _feePercent;
-    }
-
-    function setSubjectFeePercent(uint256 _feePercent) public onlyOwner {
-        subjectFeePercent = _feePercent;
-    }
-
     function getPrice(uint256 supply, uint256 amount) public pure returns (uint256) {
         uint256 sum1 = supply == 0 ? 0 : (supply - 1) * (supply) * (2 * (supply - 1) + 1) / 6;
         uint256 sum2 = supply == 0 && amount == 1
@@ -60,15 +49,15 @@ contract FriendShares is Ownable {
 
     function getBuyPriceAfterFee(address sharesSubject, uint256 amount) public view returns (uint256) {
         uint256 price = getBuyPrice(sharesSubject, amount);
-        uint256 protocolFee = price * protocolFeePercent / 1 ether;
-        uint256 subjectFee = price * subjectFeePercent / 1 ether;
+        uint256 protocolFee = price * PROTOCOL_FEE_PERCENT / FEE_PERCENT_BASE;
+        uint256 subjectFee = price * SUBJECT_FEE_PERCENT / FEE_PERCENT_BASE;
         return price + protocolFee + subjectFee;
     }
 
     function getSellPriceAfterFee(address sharesSubject, uint256 amount) public view returns (uint256) {
         uint256 price = getSellPrice(sharesSubject, amount);
-        uint256 protocolFee = price * protocolFeePercent / 1 ether;
-        uint256 subjectFee = price * subjectFeePercent / 1 ether;
+        uint256 protocolFee = price * PROTOCOL_FEE_PERCENT / FEE_PERCENT_BASE;
+        uint256 subjectFee = price * SUBJECT_FEE_PERCENT / FEE_PERCENT_BASE;
         return price - protocolFee - subjectFee;
     }
 
@@ -76,13 +65,13 @@ contract FriendShares is Ownable {
         uint256 supply = sharesSupply[sharesSubject];
         require(supply > 0 || sharesSubject == msg.sender, "Only the shares' subject can buy the first share");
         uint256 price = getPrice(supply, amount);
-        uint256 protocolFee = price * protocolFeePercent / 1 ether;
-        uint256 subjectFee = price * subjectFeePercent / 1 ether;
+        uint256 protocolFee = price * PROTOCOL_FEE_PERCENT / FEE_PERCENT_BASE;
+        uint256 subjectFee = price * SUBJECT_FEE_PERCENT / FEE_PERCENT_BASE;
         require(msg.value >= price + protocolFee + subjectFee, "Insufficient payment");
         sharesBalance[sharesSubject][msg.sender] = sharesBalance[sharesSubject][msg.sender] + amount;
         sharesSupply[sharesSubject] = supply + amount;
         emit Trade(msg.sender, sharesSubject, true, amount, price, protocolFee, subjectFee, supply + amount);
-        (bool success1,) = protocolFeeDestination.call{value: protocolFee}("");
+        (bool success1,) = owner().call{value: protocolFee}("");
         (bool success2,) = sharesSubject.call{value: subjectFee}("");
         require(success1 && success2, "Unable to send funds");
     }
@@ -91,14 +80,14 @@ contract FriendShares is Ownable {
         uint256 supply = sharesSupply[sharesSubject];
         require(supply > amount, "Cannot sell the last share");
         uint256 price = getPrice(supply - amount, amount);
-        uint256 protocolFee = price * protocolFeePercent / 1 ether;
-        uint256 subjectFee = price * subjectFeePercent / 1 ether;
+        uint256 protocolFee = price * PROTOCOL_FEE_PERCENT / FEE_PERCENT_BASE;
+        uint256 subjectFee = price * SUBJECT_FEE_PERCENT / FEE_PERCENT_BASE;
         require(sharesBalance[sharesSubject][msg.sender] >= amount, "Insufficient shares");
         sharesBalance[sharesSubject][msg.sender] = sharesBalance[sharesSubject][msg.sender] - amount;
         sharesSupply[sharesSubject] = supply - amount;
         emit Trade(msg.sender, sharesSubject, false, amount, price, protocolFee, subjectFee, supply - amount);
         (bool success1,) = msg.sender.call{value: price - protocolFee - subjectFee}("");
-        (bool success2,) = protocolFeeDestination.call{value: protocolFee}("");
+        (bool success2,) = owner().call{value: protocolFee}("");
         (bool success3,) = sharesSubject.call{value: subjectFee}("");
         require(success1 && success2 && success3, "Unable to send funds");
     }
