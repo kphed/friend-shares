@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.19;
+pragma solidity 0.8.21;
 
 import {Ownable} from "solady/auth/Ownable.sol";
 import {SafeTransferLib} from "solady/utils/SafeTransferLib.sol";
@@ -14,14 +14,11 @@ contract FriendShares is Ownable, ExponentialCurve {
     using SafeTransferLib for address;
     using SafeCastLib for uint256;
 
-    // Prevents registration spam and supports the protocol.
-    uint256 private constant REGISTRATION_FEE = 0.05 ether;
-
     // 1% fee goes to the protocol.
-    uint256 private constant PROTOCOL_FEE_PERCENT = 1e16;
+    uint256 private constant PROTOCOL_FEE_PERCENT = 2e16;
 
     // 4% fee goes to the shares user.
-    uint256 private constant USER_FEE_PERCENT = 4e16;
+    uint256 private constant USER_FEE_PERCENT = 8e16;
 
     // The price for the first share.
     uint256 private constant INITIAL_PRICE = 0.001 ether;
@@ -29,29 +26,25 @@ contract FriendShares is Ownable, ExponentialCurve {
     // Price changes by 0.01% for each share bought or sold.
     uint128 private constant EXPONENTIAL_CURVE_DELTA = 1e18 + 1e14;
 
-    mapping(string user => address wallet) public users;
-    mapping(string user => mapping(address owner => uint256 balance))
+    mapping(address user => mapping(address owner => uint256 balance))
         public sharesBalance;
-    mapping(string user => uint256 supply) public sharesSupply;
-    mapping(string user => uint256 price) public sharesPrice;
+    mapping(address user => uint256 supply) public sharesSupply;
+    mapping(address user => uint256 price) public sharesPrice;
 
-    event RegisterUser(string indexed user, address indexed wallet);
     event BuyShares(
         address indexed trader,
-        string indexed user,
+        address indexed user,
         uint256 shares,
         uint256 value
     );
     event SellShares(
         address indexed trader,
-        string indexed user,
+        address indexed user,
         uint256 shares,
         uint256 value
     );
 
-    error AlreadyRegistered();
     error InvalidUser();
-    error InvalidWallet();
     error InsufficientPayment();
     error InsufficientSupply();
 
@@ -59,27 +52,8 @@ contract FriendShares is Ownable, ExponentialCurve {
         _initializeOwner(initialOwner);
     }
 
-    function registerUser(
-        string calldata user,
-        address wallet
-    ) external payable {
-        if (users[user] != address(0)) revert AlreadyRegistered();
-        if (bytes(user).length == 0) revert InvalidUser();
-        if (wallet == address(0)) revert InvalidWallet();
-
-        // The minimum `msg.value` should be the registration fee but we will accept donations.
-        if (msg.value < REGISTRATION_FEE) revert InsufficientPayment();
-
-        users[user] = wallet;
-
-        emit RegisterUser(user, wallet);
-
-        // Send the registration fee to the protocol.
-        owner().safeTransferETH(msg.value);
-    }
-
     function getBuyPrice(
-        string calldata user,
+        address user,
         uint256 amount
     )
         public
@@ -106,7 +80,7 @@ contract FriendShares is Ownable, ExponentialCurve {
     }
 
     function getSellPrice(
-        string calldata user,
+        address user,
         uint256 amount
     )
         public
@@ -127,11 +101,7 @@ contract FriendShares is Ownable, ExponentialCurve {
         );
     }
 
-    function buyShares(string calldata user, uint256 amount) external payable {
-        address userWallet = users[user];
-
-        if (userWallet == address(0)) revert InvalidUser();
-
+    function buyShares(address user, uint256 amount) external payable {
         (
             uint128 newSpotPrice,
             uint256 buyerPayment,
@@ -155,22 +125,17 @@ contract FriendShares is Ownable, ExponentialCurve {
 
         // Distribute ETH fees.
         owner().safeTransferETH(protocolFee);
-        userWallet.safeTransferETH(userFee);
+        user.safeTransferETH(userFee);
 
         // Refund excess ETH.
         // Will not underflow since `msg.value` is GTE or equal to `buyerPayment` (checked above).
         unchecked {
-            if (msg.value - buyerPayment != 0) {
+            if (msg.value - buyerPayment != 0)
                 msg.sender.safeTransferETH(msg.value - buyerPayment);
-            }
         }
     }
 
-    function sellShares(string calldata user, uint256 amount) external {
-        address userWallet = users[user];
-
-        if (userWallet == address(0)) revert InvalidUser();
-
+    function sellShares(address user, uint256 amount) external {
         (
             uint128 newSpotPrice,
             uint256 sellerProceeds,
@@ -193,6 +158,6 @@ contract FriendShares is Ownable, ExponentialCurve {
 
         // Distribute fees to the protocol and user.
         owner().safeTransferETH(protocolFee);
-        userWallet.safeTransferETH(userFee);
+        user.safeTransferETH(userFee);
     }
 }
