@@ -24,10 +24,10 @@ contract FriendShares is Ownable, ExponentialCurve {
     uint256 private constant USER_FEE_PERCENT = 4e16;
 
     // The price for the first share.
-    uint256 private constant INITIAL_PRICE = 0.01 ether;
+    uint256 private constant INITIAL_PRICE = 0.001 ether;
 
-    // Price changes by 0.1% for each share bought or sold.
-    uint128 private constant EXPONENTIAL_CURVE_DELTA = 1e18 + 1e15;
+    // Price changes by 0.01% for each share bought or sold.
+    uint128 private constant EXPONENTIAL_CURVE_DELTA = 1e18 + 1e14;
 
     mapping(string user => address wallet) public users;
     mapping(string user => mapping(address owner => uint256 balance))
@@ -35,7 +35,7 @@ contract FriendShares is Ownable, ExponentialCurve {
     mapping(string user => uint256 supply) public sharesSupply;
     mapping(string user => uint256 price) public sharesPrice;
 
-    event RegisterUser(string user, address wallet);
+    event RegisterUser(string indexed user, address indexed wallet);
     event BuyShares(
         address indexed trader,
         string indexed user,
@@ -49,8 +49,9 @@ contract FriendShares is Ownable, ExponentialCurve {
         uint256 value
     );
 
-    error UsernameTaken();
+    error AlreadyRegistered();
     error InvalidUser();
+    error InvalidWallet();
     error InsufficientPayment();
     error InsufficientSupply();
 
@@ -62,8 +63,12 @@ contract FriendShares is Ownable, ExponentialCurve {
         string calldata user,
         address wallet
     ) external payable {
-        if (users[user] != address(0)) revert UsernameTaken();
-        if (msg.value != REGISTRATION_FEE) revert InsufficientPayment();
+        if (users[user] != address(0)) revert AlreadyRegistered();
+        if (bytes(user).length == 0) revert InvalidUser();
+        if (wallet == address(0)) revert InvalidWallet();
+
+        // The minimum `msg.value` should be the registration fee but we will accept donations.
+        if (msg.value < REGISTRATION_FEE) revert InsufficientPayment();
 
         users[user] = wallet;
 
