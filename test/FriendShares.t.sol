@@ -6,10 +6,10 @@ import {ExponentialCurve} from "sudoswap/bonding-curves/ExponentialCurve.sol";
 import {FriendShares} from "src/FriendShares.sol";
 
 contract FriendSharesTest is Test, ExponentialCurve {
+    uint128 private constant EXPONENTIAL_CURVE_DELTA = 1e18 + 1e14;
     uint256 private constant PROTOCOL_FEE_PERCENT = 2e16;
     uint256 private constant USER_FEE_PERCENT = 8e16;
     uint256 private constant INITIAL_PRICE = 0.001 ether;
-    uint128 private constant EXPONENTIAL_CURVE_DELTA = 1e18 + 1e14;
     FriendShares public immutable friend = new FriendShares(address(this));
 
     event BuyShares(
@@ -103,7 +103,6 @@ contract FriendSharesTest is Test, ExponentialCurve {
 
         address msgSender = address(1);
         address user = address(2);
-
         (
             uint128 newSpotPrice,
             uint256 buyerPayment,

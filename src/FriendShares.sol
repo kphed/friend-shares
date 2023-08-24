@@ -14,17 +14,17 @@ contract FriendShares is Ownable, ExponentialCurve {
     using SafeTransferLib for address;
     using SafeCastLib for uint256;
 
-    // 1% fee goes to the protocol.
-    uint256 private constant PROTOCOL_FEE_PERCENT = 2e16;
-
-    // 4% fee goes to the shares user.
-    uint256 private constant USER_FEE_PERCENT = 8e16;
-
-    // The price for the first share.
-    uint256 private constant INITIAL_PRICE = 0.001 ether;
-
     // Price changes by 0.01% for each share bought or sold.
     uint128 private constant EXPONENTIAL_CURVE_DELTA = 1e18 + 1e14;
+
+    // 8% fee goes to the shares user.
+    uint256 public constant USER_FEE_PERCENT = 8e16;
+
+    // 2% fee goes to the protocol.
+    uint256 public constant PROTOCOL_FEE_PERCENT = 2e16;
+
+    // The price for the first share.
+    uint256 public constant INITIAL_PRICE = 0.001 ether;
 
     mapping(address user => mapping(address owner => uint256 balance))
         public sharesBalance;
@@ -44,9 +44,7 @@ contract FriendShares is Ownable, ExponentialCurve {
         uint256 value
     );
 
-    error InvalidUser();
     error InsufficientPayment();
-    error InsufficientSupply();
 
     constructor(address initialOwner) {
         _initializeOwner(initialOwner);
@@ -115,19 +113,17 @@ contract FriendShares is Ownable, ExponentialCurve {
         // Update the user's shares supply and price, and the trader's balance before making external calls.
         unchecked {
             // Safe to perform unchecked arithmetic due to the `msg.value` check above.
-            sharesSupply[user] += amount;
             sharesBalance[user][msg.sender] += amount;
+            sharesSupply[user] += amount;
         }
 
         sharesPrice[user] = newSpotPrice;
 
         emit BuyShares(msg.sender, user, amount, buyerPayment);
 
-        // Distribute ETH fees.
-        owner().safeTransferETH(protocolFee);
         user.safeTransferETH(userFee);
+        owner().safeTransferETH(protocolFee);
 
-        // Refund excess ETH.
         // Will not underflow since `msg.value` is GTE or equal to `buyerPayment` (checked above).
         unchecked {
             if (msg.value - buyerPayment != 0)
@@ -143,11 +139,13 @@ contract FriendShares is Ownable, ExponentialCurve {
             uint256 protocolFee
         ) = getSellPrice(user, amount);
 
-        // Throws with an arithmetic underflow error if the sell amount exceeds the current supply.
-        sharesSupply[user] -= amount;
-
         // Throws with an arithmetic underflow error if `msg.sender` doesn't have enough shares to sell.
         sharesBalance[user][msg.sender] -= amount;
+
+        // Will not underflow if the above doesn't since share balances should never exceed the supply.
+        unchecked {
+            sharesSupply[user] -= amount;
+        }
 
         sharesPrice[user] = newSpotPrice;
 
@@ -156,8 +154,7 @@ contract FriendShares is Ownable, ExponentialCurve {
         // Distribute sales proceeds to shares seller (fees have already been deducted).
         msg.sender.safeTransferETH(sellerProceeds);
 
-        // Distribute fees to the protocol and user.
-        owner().safeTransferETH(protocolFee);
         user.safeTransferETH(userFee);
+        owner().safeTransferETH(protocolFee);
     }
 }
