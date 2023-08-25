@@ -1,5 +1,5 @@
 [profile.default]
-solc = '0.8.21'
+solc = '0.8.19'
 src = 'src'
 out = 'out'
 libs = ['lib']
@@ -12,7 +12,7 @@ runs = 10_000
 
 [profile.optimized]
 optimizer = true
-optimizer_runs = 4_294_967_295
+optimizer_runs = 4_294_967
 via_ir = true
 out = 'optimized-out'
 

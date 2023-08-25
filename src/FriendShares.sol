@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.21;
+pragma solidity 0.8.19;
 
 import {Ownable} from "solady/auth/Ownable.sol";
 import {ExponentialCurve} from "sudoswap/bonding-curves/ExponentialCurve.sol";
@@ -57,18 +57,11 @@ contract FriendShares is Ownable, ExponentialCurve {
         _initializeOwner(initialOwner);
     }
 
-    function balanceOf(
-        address user,
-        address owner
-    ) external view returns (uint256) {
-        return users[user].balanceOf[owner];
-    }
-
     function _getBuyPrice(
         uint128 spotPrice,
         uint256 amount
     )
-        public
+        private
         pure
         returns (
             uint128 newSpotPrice,
@@ -77,7 +70,7 @@ contract FriendShares is Ownable, ExponentialCurve {
             uint256 protocolFee
         )
     {
-        (, newSpotPrice, , buyerPayment, userFee, protocolFee) = getBuyInfo(
+        (newSpotPrice, buyerPayment, userFee, protocolFee) = _getBuyInfo(
             spotPrice,
             EXPONENTIAL_CURVE_DELTA,
             amount,
@@ -90,7 +83,7 @@ contract FriendShares is Ownable, ExponentialCurve {
         uint128 spotPrice,
         uint256 amount
     )
-        internal
+        private
         pure
         returns (
             uint128 newSpotPrice,
@@ -99,7 +92,7 @@ contract FriendShares is Ownable, ExponentialCurve {
             uint256 protocolFee
         )
     {
-        (, newSpotPrice, , sellerProceeds, userFee, protocolFee) = getSellInfo(
+        (newSpotPrice, sellerProceeds, userFee, protocolFee) = _getSellInfo(
             spotPrice,
             EXPONENTIAL_CURVE_DELTA,
             amount,
@@ -112,7 +105,7 @@ contract FriendShares is Ownable, ExponentialCurve {
         address user,
         uint256 amount
     )
-        public
+        external
         view
         returns (
             uint128 newSpotPrice,
@@ -132,8 +125,15 @@ contract FriendShares is Ownable, ExponentialCurve {
     function getSellPrice(
         address user,
         uint256 amount
-    ) public view returns (uint128, uint256, uint256, uint256) {
+    ) external view returns (uint128, uint256, uint256, uint256) {
         return _getSellPrice(users[user].price, amount);
+    }
+
+    function balanceOf(
+        address user,
+        address owner
+    ) external view returns (uint256) {
+        return users[user].balanceOf[owner];
     }
 
     function buyShares(address user, uint256 amount) external payable {
@@ -143,7 +143,10 @@ contract FriendShares is Ownable, ExponentialCurve {
             uint256 buyerPayment,
             uint256 userFee,
             uint256 protocolFee
-        ) = _getBuyPrice(_user.price, amount);
+        ) = _getBuyPrice(
+                _user.price != 0 ? _user.price : INITIAL_PRICE,
+                amount
+            );
 
         // Check if the payment is enough for the shares, protocol, and user fees.
         if (msg.value < buyerPayment) revert InsufficientPayment();

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.21;
+pragma solidity 0.8.19;
 
 import "forge-std/Test.sol";
 import {FixedPointMathLib} from "solady/utils/FixedPointMathLib.sol";
@@ -47,7 +47,7 @@ contract FriendSharesTest is Test, ExponentialCurve {
 
         if (spotPrice == 0) spotPrice = INITIAL_PRICE;
 
-        (, newSpotPrice, , buyerPayment, userFee, protocolFee) = getBuyInfo(
+        (newSpotPrice, buyerPayment, userFee, protocolFee) = _getBuyInfo(
             uint128(spotPrice),
             EXPONENTIAL_CURVE_DELTA,
             amount,
