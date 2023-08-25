@@ -9,10 +9,7 @@ import {FriendShares} from "src/FriendShares.sol";
 contract FriendSharesTest is Test, ExponentialCurve {
     using FixedPointMathLib for uint256;
 
-    uint128 private constant EXPONENTIAL_CURVE_DELTA = 1e18 + 1e14;
     uint128 private constant INITIAL_PRICE = 0.001 ether;
-    uint256 private constant PROTOCOL_FEE_PERCENT = 2e16;
-    uint256 private constant USER_FEE_PERCENT = 8e16;
     FriendShares public immutable friend = new FriendShares(address(this));
 
     event BuyShares(
@@ -47,12 +44,9 @@ contract FriendSharesTest is Test, ExponentialCurve {
 
         if (spotPrice == 0) spotPrice = INITIAL_PRICE;
 
-        (newSpotPrice, buyerPayment, userFee, protocolFee) = _getBuyInfo(
+        (newSpotPrice, buyerPayment, userFee, protocolFee) = getBuyInfo(
             uint128(spotPrice),
-            EXPONENTIAL_CURVE_DELTA,
-            amount,
-            USER_FEE_PERCENT,
-            PROTOCOL_FEE_PERCENT
+            amount
         );
     }
 

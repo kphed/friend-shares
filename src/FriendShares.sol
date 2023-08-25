@@ -22,19 +22,8 @@ contract FriendShares is Ownable, ExponentialCurve {
         mapping(address owner => uint256 balance) balanceOf;
     }
 
-    // Price changes by 0.01% for each share bought or sold.
-    uint128 private constant EXPONENTIAL_CURVE_DELTA = 10001e14;
-
     // The price for the first share.
     uint128 private constant INITIAL_PRICE = 0.001 ether;
-
-    // 8% fee goes to the shares user.
-    // FixedPointMathLib.WAD.mulDiv(8, 100).
-    uint256 public constant USER_FEE_PERCENT = 8e16;
-
-    // 2% fee goes to the protocol.
-    // FixedPointMathLib.WAD.mulDiv(2, 100).
-    uint256 public constant PROTOCOL_FEE_PERCENT = 2e16;
 
     mapping(address user => User) public users;
 
@@ -57,78 +46,6 @@ contract FriendShares is Ownable, ExponentialCurve {
         _initializeOwner(initialOwner);
     }
 
-    function _getBuyPrice(
-        uint128 spotPrice,
-        uint256 amount
-    )
-        private
-        pure
-        returns (
-            uint128 newSpotPrice,
-            uint256 buyerPayment,
-            uint256 userFee,
-            uint256 protocolFee
-        )
-    {
-        (newSpotPrice, buyerPayment, userFee, protocolFee) = _getBuyInfo(
-            spotPrice,
-            EXPONENTIAL_CURVE_DELTA,
-            amount,
-            USER_FEE_PERCENT,
-            PROTOCOL_FEE_PERCENT
-        );
-    }
-
-    function _getSellPrice(
-        uint128 spotPrice,
-        uint256 amount
-    )
-        private
-        pure
-        returns (
-            uint128 newSpotPrice,
-            uint256 sellerProceeds,
-            uint256 userFee,
-            uint256 protocolFee
-        )
-    {
-        (newSpotPrice, sellerProceeds, userFee, protocolFee) = _getSellInfo(
-            spotPrice,
-            EXPONENTIAL_CURVE_DELTA,
-            amount,
-            USER_FEE_PERCENT,
-            PROTOCOL_FEE_PERCENT
-        );
-    }
-
-    function getBuyPrice(
-        address user,
-        uint256 amount
-    )
-        external
-        view
-        returns (
-            uint128 newSpotPrice,
-            uint256 buyerPayment,
-            uint256 userFee,
-            uint256 protocolFee
-        )
-    {
-        uint128 spotPrice = users[user].price;
-
-        // Set the initial spot price if it has not yet been set.
-        if (spotPrice == 0) spotPrice = INITIAL_PRICE;
-
-        return _getBuyPrice(spotPrice, amount);
-    }
-
-    function getSellPrice(
-        address user,
-        uint256 amount
-    ) external view returns (uint128, uint256, uint256, uint256) {
-        return _getSellPrice(users[user].price, amount);
-    }
-
     function balanceOf(
         address user,
         address owner
@@ -143,10 +60,7 @@ contract FriendShares is Ownable, ExponentialCurve {
             uint256 buyerPayment,
             uint256 userFee,
             uint256 protocolFee
-        ) = _getBuyPrice(
-                _user.price != 0 ? _user.price : INITIAL_PRICE,
-                amount
-            );
+        ) = getBuyInfo(_user.price != 0 ? _user.price : INITIAL_PRICE, amount);
 
         // Check if the payment is enough for the shares, protocol, and user fees.
         if (msg.value < buyerPayment) revert InsufficientPayment();
@@ -172,21 +86,21 @@ contract FriendShares is Ownable, ExponentialCurve {
         }
     }
 
-    function sellShares(address user, uint256 amount) external {
+    function sellShares(address user, uint128 amount) external {
         User storage _user = users[user];
         (
             uint128 newSpotPrice,
             uint256 sellerProceeds,
             uint256 userFee,
             uint256 protocolFee
-        ) = _getSellPrice(_user.price, amount);
+        ) = getSellInfo(_user.price, amount);
 
         // Throws with an arithmetic underflow error if `msg.sender` doesn't have enough shares to sell.
         _user.balanceOf[msg.sender] -= amount;
 
         // Will not underflow if the above doesn't since share balances should never exceed the supply.
         unchecked {
-            _user.supply -= amount.toUint128();
+            _user.supply -= amount;
         }
 
         _user.price = newSpotPrice;
