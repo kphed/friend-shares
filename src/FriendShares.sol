@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.19;
 
-import {ExponentialCurve} from "sudoswap/bonding-curves/ExponentialCurve.sol";
 import {SafeTransferLib} from "solady/utils/SafeTransferLib.sol";
+import {ExponentialCurve} from "src/lib/ExponentialCurve.sol";
 
 /**
  * @notice Buy and sell shares of your friends. Based on FriendTech.

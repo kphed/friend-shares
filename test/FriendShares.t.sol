@@ -2,7 +2,7 @@
 pragma solidity 0.8.19;
 
 import "forge-std/Test.sol";
-import {ExponentialCurve} from "sudoswap/bonding-curves/ExponentialCurve.sol";
+import {ExponentialCurve} from "src/lib/ExponentialCurve.sol";
 import {FriendShares} from "src/FriendShares.sol";
 
 contract FriendSharesTest is Test, ExponentialCurve {
