@@ -2,14 +2,17 @@
 pragma solidity 0.8.21;
 
 import "forge-std/Test.sol";
+import {FixedPointMathLib} from "solady/utils/FixedPointMathLib.sol";
 import {ExponentialCurve} from "sudoswap/bonding-curves/ExponentialCurve.sol";
 import {FriendShares} from "src/FriendShares.sol";
 
 contract FriendSharesTest is Test, ExponentialCurve {
+    using FixedPointMathLib for uint256;
+
     uint128 private constant EXPONENTIAL_CURVE_DELTA = 1e18 + 1e14;
+    uint128 private constant INITIAL_PRICE = 0.001 ether;
     uint256 private constant PROTOCOL_FEE_PERCENT = 2e16;
     uint256 private constant USER_FEE_PERCENT = 8e16;
-    uint256 private constant INITIAL_PRICE = 0.001 ether;
     FriendShares public immutable friend = new FriendShares(address(this));
 
     event BuyShares(
@@ -40,7 +43,7 @@ contract FriendSharesTest is Test, ExponentialCurve {
             uint256 protocolFee
         )
     {
-        uint256 spotPrice = friend.sharesPrice(user);
+        (, uint256 spotPrice) = friend.users(user);
 
         if (spotPrice == 0) spotPrice = INITIAL_PRICE;
 
@@ -78,10 +81,11 @@ contract FriendSharesTest is Test, ExponentialCurve {
         ) = _calculateSharesBuyPrice(user, amount);
         uint256 userBalanceBefore = user.balance;
         uint256 protocolBalanceBefore = address(this).balance;
+        (uint256 supply, uint256 price) = friend.users(user);
 
-        assertEq(0, friend.sharesSupply(user));
-        assertEq(0, friend.sharesBalance(user, msgSender));
-        assertEq(0, friend.sharesPrice(user));
+        assertEq(0, supply);
+        assertEq(0, price);
+        assertEq(0, friend.balanceOf(user, msgSender));
 
         vm.deal(msgSender, buyerPayment);
         vm.prank(msgSender);
@@ -91,9 +95,11 @@ contract FriendSharesTest is Test, ExponentialCurve {
 
         friend.buyShares{value: buyerPayment}(user, amount);
 
-        assertEq(amount, friend.sharesSupply(user));
-        assertEq(amount, friend.sharesBalance(user, msgSender));
-        assertEq(newSpotPrice, friend.sharesPrice(user));
+        (supply, price) = friend.users(user);
+
+        assertEq(amount, supply);
+        assertEq(newSpotPrice, price);
+        assertEq(amount, friend.balanceOf(user, msgSender));
         assertEq(userBalanceBefore + userFee, user.balance);
         assertEq(protocolBalanceBefore + protocolFee, address(this).balance);
     }
@@ -123,9 +129,11 @@ contract FriendSharesTest is Test, ExponentialCurve {
 
         friend.buyShares{value: buyerPayment + extraValue}(user, amount);
 
-        assertEq(amount, friend.sharesSupply(user));
-        assertEq(amount, friend.sharesBalance(user, msgSender));
-        assertEq(newSpotPrice, friend.sharesPrice(user));
+        (uint256 supply, uint256 price) = friend.users(user);
+
+        assertEq(amount, supply);
+        assertEq(newSpotPrice, price);
+        assertEq(amount, friend.balanceOf(user, msgSender));
         assertEq(userBalanceBefore + userFee, user.balance);
         assertEq(protocolBalanceBefore + protocolFee, address(this).balance);
         assertEq(msgSenderBalanceBefore - buyerPayment, msgSender.balance);
