@@ -2,14 +2,10 @@
 pragma solidity 0.8.19;
 
 import "forge-std/Test.sol";
-import {FixedPointMathLib} from "solady/utils/FixedPointMathLib.sol";
 import {ExponentialCurve} from "sudoswap/bonding-curves/ExponentialCurve.sol";
 import {FriendShares} from "src/FriendShares.sol";
 
 contract FriendSharesTest is Test, ExponentialCurve {
-    using FixedPointMathLib for uint256;
-
-    uint128 private constant INITIAL_PRICE = 0.001 ether;
     FriendShares public immutable friend = new FriendShares(address(this));
 
     event BuyShares(
@@ -40,12 +36,9 @@ contract FriendSharesTest is Test, ExponentialCurve {
             uint256 protocolFee
         )
     {
-        (, uint256 spotPrice) = friend.users(user);
-
-        if (spotPrice == 0) spotPrice = INITIAL_PRICE;
-
+        (, uint128 spotPrice) = friend.users(user);
         (newSpotPrice, buyerPayment, userFee, protocolFee) = getBuyInfo(
-            uint128(spotPrice),
+            spotPrice,
             amount
         );
     }
@@ -56,7 +49,7 @@ contract FriendSharesTest is Test, ExponentialCurve {
 
     function testCannotBuyShares_InsufficientPayment() external {
         address user = address(1);
-        uint256 amount = 1;
+        uint128 amount = 1;
 
         vm.expectRevert(FriendShares.InsufficientPayment.selector);
 
@@ -66,7 +59,7 @@ contract FriendSharesTest is Test, ExponentialCurve {
     function testBuyShares() external {
         address msgSender = address(1);
         address user = address(2);
-        uint256 amount = 1;
+        uint128 amount = 1;
         (
             uint128 newSpotPrice,
             uint256 buyerPayment,

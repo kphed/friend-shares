@@ -1,20 +1,15 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.19;
 
-import {Ownable} from "solady/auth/Ownable.sol";
 import {ExponentialCurve} from "sudoswap/bonding-curves/ExponentialCurve.sol";
-import {FixedPointMathLib} from "solady/utils/FixedPointMathLib.sol";
 import {SafeTransferLib} from "solady/utils/SafeTransferLib.sol";
-import {SafeCastLib} from "solady/utils/SafeCastLib.sol";
 
 /**
  * @notice Buy and sell shares of your friends. Based on FriendTech.
  * @author kp (ppmoon69.eth)
  */
-contract FriendShares is Ownable, ExponentialCurve {
-    using FixedPointMathLib for uint256;
+contract FriendShares is ExponentialCurve {
     using SafeTransferLib for address;
-    using SafeCastLib for uint256;
 
     struct User {
         uint128 supply;
@@ -22,9 +17,7 @@ contract FriendShares is Ownable, ExponentialCurve {
         mapping(address owner => uint256 balance) balanceOf;
     }
 
-    // The price for the first share.
-    uint128 private constant INITIAL_PRICE = 0.001 ether;
-
+    address public immutable protocol;
     mapping(address user => User) public users;
 
     event BuyShares(
@@ -42,8 +35,8 @@ contract FriendShares is Ownable, ExponentialCurve {
 
     error InsufficientPayment();
 
-    constructor(address initialOwner) {
-        _initializeOwner(initialOwner);
+    constructor(address _protocol) {
+        protocol = _protocol;
     }
 
     function balanceOf(
@@ -53,14 +46,14 @@ contract FriendShares is Ownable, ExponentialCurve {
         return users[user].balanceOf[owner];
     }
 
-    function buyShares(address user, uint256 amount) external payable {
+    function buyShares(address user, uint128 amount) external payable {
         User storage _user = users[user];
         (
             uint128 newSpotPrice,
             uint256 buyerPayment,
             uint256 userFee,
             uint256 protocolFee
-        ) = getBuyInfo(_user.price != 0 ? _user.price : INITIAL_PRICE, amount);
+        ) = getBuyInfo(_user.price, amount);
 
         // Check if the payment is enough for the shares, protocol, and user fees.
         if (msg.value < buyerPayment) revert InsufficientPayment();
@@ -69,15 +62,14 @@ contract FriendShares is Ownable, ExponentialCurve {
         unchecked {
             // Safe to perform unchecked arithmetic due to the `msg.value` check above.
             _user.balanceOf[msg.sender] += amount;
-            _user.supply += amount.toUint128();
+            _user.supply += amount;
+            _user.price = newSpotPrice;
         }
-
-        _user.price = newSpotPrice;
 
         emit BuyShares(msg.sender, user, amount, buyerPayment);
 
         user.safeTransferETH(userFee);
-        owner().safeTransferETH(protocolFee);
+        protocol.safeTransferETH(protocolFee);
 
         // Will not underflow since `msg.value` is GTE or equal to `buyerPayment` (checked above).
         unchecked {
@@ -101,9 +93,8 @@ contract FriendShares is Ownable, ExponentialCurve {
         // Will not underflow if the above doesn't since share balances should never exceed the supply.
         unchecked {
             _user.supply -= amount;
+            _user.price = newSpotPrice;
         }
-
-        _user.price = newSpotPrice;
 
         emit SellShares(msg.sender, user, amount, sellerProceeds);
 
@@ -111,6 +102,6 @@ contract FriendShares is Ownable, ExponentialCurve {
         msg.sender.safeTransferETH(sellerProceeds);
 
         user.safeTransferETH(userFee);
-        owner().safeTransferETH(protocolFee);
+        protocol.safeTransferETH(protocolFee);
     }
 }
