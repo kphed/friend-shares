@@ -46,7 +46,11 @@ contract FriendShares is ExponentialCurve {
         return users[user].balanceOf[owner];
     }
 
-    function buyShares(address user, uint128 amount) external payable {
+    function buyShares(
+        address user,
+        uint128 amount,
+        address recipient
+    ) external payable {
         User storage _user = users[user];
         (
             uint128 newSpotPrice,
@@ -61,7 +65,7 @@ contract FriendShares is ExponentialCurve {
         // Update the user's shares supply and price, and the trader's balance before making external calls.
         unchecked {
             // Safe to perform unchecked arithmetic due to the `msg.value` check above.
-            _user.balanceOf[msg.sender] += amount;
+            _user.balanceOf[recipient] += amount;
             _user.supply += amount;
             _user.price = newSpotPrice;
         }
@@ -78,7 +82,11 @@ contract FriendShares is ExponentialCurve {
         }
     }
 
-    function sellShares(address user, uint128 amount) external {
+    function sellShares(
+        address user,
+        uint128 amount,
+        address recipient
+    ) external {
         User storage _user = users[user];
         (
             uint128 newSpotPrice,
@@ -98,8 +106,8 @@ contract FriendShares is ExponentialCurve {
 
         emit SellShares(msg.sender, user, amount, sellerProceeds);
 
-        // Distribute sales proceeds to shares seller (fees have already been deducted).
-        msg.sender.safeTransferETH(sellerProceeds);
+        // Distribute sales proceeds to the recipient specified by the seller (fees have already been deducted).
+        recipient.safeTransferETH(sellerProceeds);
 
         user.safeTransferETH(userFee);
         protocol.safeTransferETH(protocolFee);

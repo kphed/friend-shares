@@ -50,16 +50,18 @@ contract FriendSharesTest is Test, ExponentialCurve {
     function testCannotBuyShares_InsufficientPayment() external {
         address user = address(1);
         uint128 amount = 1;
+        address recipient = address(2);
 
         vm.expectRevert(FriendShares.InsufficientPayment.selector);
 
-        friend.buyShares{value: 0}(user, amount);
+        friend.buyShares{value: 0}(user, amount, recipient);
     }
 
     function testBuyShares() external {
         address msgSender = address(1);
         address user = address(2);
         uint128 amount = 1;
+        address recipient = address(3);
         (
             uint128 newSpotPrice,
             uint256 buyerPayment,
@@ -72,7 +74,7 @@ contract FriendSharesTest is Test, ExponentialCurve {
 
         assertEq(0, supply);
         assertEq(0, price);
-        assertEq(0, friend.balanceOf(user, msgSender));
+        assertEq(0, friend.balanceOf(user, recipient));
 
         vm.deal(msgSender, buyerPayment);
         vm.prank(msgSender);
@@ -80,13 +82,13 @@ contract FriendSharesTest is Test, ExponentialCurve {
 
         emit BuyShares(msgSender, user, amount, buyerPayment);
 
-        friend.buyShares{value: buyerPayment}(user, amount);
+        friend.buyShares{value: buyerPayment}(user, amount, recipient);
 
         (supply, price) = friend.users(user);
 
         assertEq(amount, supply);
         assertEq(newSpotPrice, price);
-        assertEq(amount, friend.balanceOf(user, msgSender));
+        assertEq(amount, friend.balanceOf(user, recipient));
         assertEq(userBalanceBefore + userFee, user.balance);
         assertEq(protocolBalanceBefore + protocolFee, address(this).balance);
     }
@@ -96,6 +98,7 @@ contract FriendSharesTest is Test, ExponentialCurve {
 
         address msgSender = address(1);
         address user = address(2);
+        address recipient = address(3);
         (
             uint128 newSpotPrice,
             uint256 buyerPayment,
@@ -114,13 +117,13 @@ contract FriendSharesTest is Test, ExponentialCurve {
 
         emit BuyShares(msgSender, user, amount, buyerPayment);
 
-        friend.buyShares{value: buyerPayment + extraValue}(user, amount);
+        friend.buyShares{value: buyerPayment + extraValue}(user, amount, recipient);
 
         (uint256 supply, uint256 price) = friend.users(user);
 
         assertEq(amount, supply);
         assertEq(newSpotPrice, price);
-        assertEq(amount, friend.balanceOf(user, msgSender));
+        assertEq(amount, friend.balanceOf(user, recipient));
         assertEq(userBalanceBefore + userFee, user.balance);
         assertEq(protocolBalanceBefore + protocolFee, address(this).balance);
         assertEq(msgSenderBalanceBefore - buyerPayment, msgSender.balance);
