@@ -23,12 +23,14 @@ contract FriendShares is ExponentialCurve {
     event BuyShares(
         address indexed trader,
         address indexed user,
+        address indexed recipient,
         uint256 shares,
         uint256 value
     );
     event SellShares(
         address indexed trader,
         address indexed user,
+        address indexed recipient,
         uint256 shares,
         uint256 value
     );
@@ -70,7 +72,7 @@ contract FriendShares is ExponentialCurve {
             _user.price = newSpotPrice;
         }
 
-        emit BuyShares(msg.sender, user, amount, buyerPayment);
+        emit BuyShares(msg.sender, user, recipient, amount, buyerPayment);
 
         user.safeTransferETH(userFee);
         protocol.safeTransferETH(protocolFee);
@@ -104,7 +106,7 @@ contract FriendShares is ExponentialCurve {
             _user.price = newSpotPrice;
         }
 
-        emit SellShares(msg.sender, user, amount, sellerProceeds);
+        emit SellShares(msg.sender, user, recipient, amount, sellerProceeds);
 
         // Distribute sales proceeds to the recipient specified by the seller (fees have already been deducted).
         recipient.safeTransferETH(sellerProceeds);

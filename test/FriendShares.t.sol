@@ -11,12 +11,14 @@ contract FriendSharesTest is Test, ExponentialCurve {
     event BuyShares(
         address indexed trader,
         address indexed user,
+        address indexed recipient,
         uint256 shares,
         uint256 value
     );
     event SellShares(
         address indexed trader,
         address indexed user,
+        address indexed recipient,
         uint256 shares,
         uint256 value
     );
@@ -80,7 +82,7 @@ contract FriendSharesTest is Test, ExponentialCurve {
         vm.prank(msgSender);
         vm.expectEmit(true, true, false, true, address(friend));
 
-        emit BuyShares(msgSender, user, amount, buyerPayment);
+        emit BuyShares(msgSender, user, recipient, amount, buyerPayment);
 
         friend.buyShares{value: buyerPayment}(user, amount, recipient);
 
@@ -115,9 +117,13 @@ contract FriendSharesTest is Test, ExponentialCurve {
         vm.prank(msgSender);
         vm.expectEmit(true, true, false, true, address(friend));
 
-        emit BuyShares(msgSender, user, amount, buyerPayment);
+        emit BuyShares(msgSender, user, recipient, amount, buyerPayment);
 
-        friend.buyShares{value: buyerPayment + extraValue}(user, amount, recipient);
+        friend.buyShares{value: buyerPayment + extraValue}(
+            user,
+            amount,
+            recipient
+        );
 
         (uint256 supply, uint256 price) = friend.users(user);
 

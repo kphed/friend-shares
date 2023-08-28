@@ -13,3 +13,4 @@ optimized-out/
 
 scripts/loadEnv.sh
 broadcast/
+.DS_Store

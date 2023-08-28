@@ -19,18 +19,18 @@ contract ExponentialCurve {
     uint256 private constant _MIN_PRICE = 1000000 wei;
 
     // Spot price for the first share of a user purchased.
-    uint128 private constant _INITIAL_PRICE = 0.001 ether;
+    uint128 private constant _INITIAL_PRICE = 0.01 ether;
 
-    // Price changes by 0.25% for each share bought or sold.
-    uint128 private constant _DELTA = 10025e14;
+    // Price changes by 1% for each share bought or sold.
+    uint128 private constant _DELTA = 1e18 + 1e16;
 
-    // 1.5% fee goes to the shares user.
-    // FixedPointMathLib.WAD.mulDiv(15, 1000).
-    uint256 private constant _USER_FEE_PERCENT = 15e15;
+    // 0.75% fee goes to the shares user.
+    // FixedPointMathLib.WAD.mulDiv(75, 10000).
+    uint256 private constant _USER_FEE_PERCENT = 75e14;
 
-    // 0.5% fee goes to the protocol.
-    // FixedPointMathLib.WAD.mulDiv(5, 1000).
-    uint256 private constant _PROTOCOL_FEE_PERCENT = 5e15;
+    // 0.25% fee goes to the protocol.
+    // FixedPointMathLib.WAD.mulDiv(25, 10000).
+    uint256 private constant _PROTOCOL_FEE_PERCENT = 25e14;
 
     error InvalidNumItems();
     error SpotPriceOverflow();
